@@ -1,5 +1,6 @@
 language: csharp
 sudo: false
+dist: trusty
 mono:
   - latest
   - 3.12.1
