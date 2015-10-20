@@ -4,6 +4,8 @@ dist: trusty
 mono:
   - latest
   - 3.12.0
+install:
+  - sudo apt-get install nunit-console
 script:
 - ./build.sh 0.0.0.0
-- ./run_tests.sh
+- nunit-console bin\tests\EventStore.BufferManagement.Tests.dll bin\tests\EventStore.Core.Tests.dll bin\tests\EventStore.Projections.Core.Tests.dll /framework:net-4.5 /noshadow 
