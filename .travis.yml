@@ -4,8 +4,6 @@ dist: trusty
 mono:
   - latest
   - 3.12.0
-install:
-  - sudo apt-get install nunit-console
 script:
 - ./build.sh 0.0.0.0
 - ./run_tc_tests.sh .
