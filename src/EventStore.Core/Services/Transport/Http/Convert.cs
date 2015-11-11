@@ -183,6 +183,23 @@ namespace EventStore.Core.Services.Transport.Http
             return feed;
         }
 
+        public static FeedElement ToDescriptionDocument(Uri requestedUrl, ICodec[] supportedCodecs)
+        {
+            var self = requestedUrl.AbsoluteUri;
+            var feed = new FeedElement();
+            feed.SetTitle("Description Document");
+            feed.SetId(self);
+            feed.SetUpdated(DateTime.UtcNow);
+            feed.SetAuthor(AtomSpecs.Author);
+
+            foreach(var codec in supportedCodecs)
+            {
+                feed.AddLink("alternate", self, codec.ContentType);
+            }
+
+            return feed;
+        }
+
         public static EntryElement ToEntry(ResolvedEvent eventLinkPair, Uri requestedUrl, EmbedLevel embedContent, bool singleEntry = false)
         {
             if (requestedUrl == null)

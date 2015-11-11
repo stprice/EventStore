@@ -109,5 +109,10 @@ namespace EventStore.Core.Services.Transport.Http
 
             return entity.ResponseCodec.To(Convert.ToNextNPersistentMessagesFeed(msg, entity.RequestedUrl, streamId, groupName, count, embed));
         }
+
+        public static string GetDescriptionDocument(HttpResponseFormatterArgs entity, ICodec[] supportedCodecs)
+        {
+            return entity.ResponseCodec.To(Convert.ToDescriptionDocument(entity.RequestedUrl, supportedCodecs));
+        }
     }
 }

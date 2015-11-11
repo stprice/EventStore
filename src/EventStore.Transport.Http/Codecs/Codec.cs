@@ -16,6 +16,8 @@ namespace EventStore.Transport.Http.Codecs
         public static readonly CustomCodec EventJson = new CustomCodec(Json, ContentType.EventJson, Helper.UTF8NoBom, true, true);
         public static readonly CustomCodec EventsXml = new CustomCodec(Xml, ContentType.EventsXml, Helper.UTF8NoBom, true, true);
         public static readonly CustomCodec EventsJson = new CustomCodec(Json, ContentType.EventsJson, Helper.UTF8NoBom, true, true);
+        public static readonly CustomCodec DescriptionXml = new CustomCodec(Xml, ContentType.DescriptionDoc, Helper.UTF8NoBom, true, true);
+        public static readonly CustomCodec DescriptionJson = new CustomCodec(Json, ContentType.DescriptionDocJson, Helper.UTF8NoBom, true, true);
         public static readonly TextCodec Text = new TextCodec();
 
         public static ICodec CreateCustom(ICodec codec, string contentType, Encoding encoding, bool hasEventIds, bool hasEventTypes)
