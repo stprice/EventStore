@@ -6,6 +6,10 @@ TestResult.xml
 /Data-logs
 /src/EventStore/v8
 /v8/
+.gclient
+.gclient_entries
+depot_tools/
+v8build/
 ipch/
 *.o
 *.ii
@@ -35,6 +39,8 @@ src/EventStore/EventStore.ClientAPI/Properties/AssemblyVersion.cs
 out
 obj
 bin
+dependencies
+
 *.csproj.user
 *ReSharper*
 *resharper*
@@ -43,6 +49,7 @@ bin
 *.cache
 *.ncrunchsolution
 *.ncrunchproject
+src/.vs/
 
 .idea
 
@@ -51,7 +58,6 @@ bin
 !*.csproj.ReSharper
 
 Release
-Build
 Debug
 
 *.vssscc
@@ -95,3 +101,9 @@ test_results
 
 # Mac
 .DS_Store
+
+# Visual Studio Code
+src/.vscode/
+
+#NCrunch
+_NCrunch_*/

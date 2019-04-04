@@ -6,236 +6,222 @@ using System.Threading;
 using EventStore.Common.Utils;
 using EventStore.Core.Exceptions;
 
-namespace EventStore.Core.Index
-{
-    public class HashListMemTable : IMemTable, ISearchTable
-    {
-        private static readonly IComparer<Entry> MemTableComparer = new EntryComparer();
+namespace EventStore.Core.Index {
+	public class HashListMemTable : IMemTable, ISearchTable {
+		private static readonly IComparer<Entry> MemTableComparer = new EntryComparer();
 
-        public int Count { get { return _count; } }
-        public Guid Id { get { return _id; } }
+		public long Count {
+			get { return _count; }
+		}
 
-        private readonly ConcurrentDictionary<uint, SortedList<Entry, byte>> _hash;
-        private readonly Guid _id = Guid.NewGuid();
-        private int _count;
+		public Guid Id {
+			get { return _id; }
+		}
 
-        private int _isConverting;
+		public byte Version {
+			get { return _version; }
+		}
 
-        public HashListMemTable(int maxSize)
-        {
-            _hash = new ConcurrentDictionary<uint, SortedList<Entry, byte>>();
-        }
+		private readonly ConcurrentDictionary<ulong, SortedList<Entry, byte>> _hash;
+		private readonly Guid _id = Guid.NewGuid();
+		private readonly byte _version;
+		private int _count;
 
-        public bool MarkForConversion()
-        {
-            return Interlocked.CompareExchange(ref _isConverting, 1, 0) == 0;
-        }
+		private int _isConverting;
 
-        public void Add(uint stream, int version, long position)
-        {
-            AddEntries(new[] { new IndexEntry(stream, version, position) });
-        }
+		public HashListMemTable(byte version, int maxSize) {
+			_version = version;
+			_hash = new ConcurrentDictionary<ulong, SortedList<Entry, byte>>();
+		}
 
-        public void AddEntries(IList<IndexEntry> entries)
-        {
-            Ensure.NotNull(entries, "entries");
-            Ensure.Positive(entries.Count, "entries.Count");
+		public bool MarkForConversion() {
+			return Interlocked.CompareExchange(ref _isConverting, 1, 0) == 0;
+		}
 
-            // only one thread at a time can write
-            Interlocked.Add(ref _count, entries.Count);
+		public void Add(ulong stream, long version, long position) {
+			AddEntries(new[] {new IndexEntry(stream, version, position)});
+		}
 
-            var stream = entries[0].Stream; // NOTE: all entries should have the same stream
-            SortedList<Entry, byte> list;
-            if (!_hash.TryGetValue(stream, out list))
-            {
-                list = new SortedList<Entry, byte>(MemTableComparer);
-                _hash.AddOrUpdate(stream, list, (x, y) => { throw new Exception("This should never happen as MemTable updates are single-threaded."); });
-            }
+		public void AddEntries(IList<IndexEntry> entries) {
+			Ensure.NotNull(entries, "entries");
+			Ensure.Positive(entries.Count, "entries.Count");
 
-            if (!Monitor.TryEnter(list, 10000))
-                throw new UnableToAcquireLockInReasonableTimeException();
-            try
-            {
-                for (int i = 0, n = entries.Count; i < n; ++i)
-                {
-                    var entry = entries[i];
-                    if (entry.Stream != stream)
-                        throw new Exception("Not all index entries in a bulk have the same stream hash.");
-                    Ensure.Nonnegative(entry.Version, "entry.Version");
-                    Ensure.Nonnegative(entry.Position, "entry.Position");
-                    list.Add(new Entry(entry.Version, entry.Position), 0);
-                }
-            }
-            finally
-            {
-                Monitor.Exit(list);
-            }
-        }
+			var collection = entries.Select(x => new IndexEntry(GetHash(x.Stream), x.Version, x.Position)).ToList();
 
-        public bool TryGetOneValue(uint stream, int number, out long position)
-        {
-            if (number < 0)
-                throw new ArgumentOutOfRangeException("number");
+			// only one thread at a time can write
+			Interlocked.Add(ref _count, collection.Count);
 
-            position = 0;
+			var stream = collection[0].Stream; // NOTE: all entries should have the same stream
+			SortedList<Entry, byte> list;
+			if (!_hash.TryGetValue(stream, out list)) {
+				list = new SortedList<Entry, byte>(MemTableComparer);
+				_hash.AddOrUpdate(stream, list,
+					(x, y) => {
+						throw new Exception("This should never happen as MemTable updates are single-threaded.");
+					});
+			}
 
-            SortedList<Entry, byte> list;
-            if (_hash.TryGetValue(stream, out list))
-            {
-                if (!Monitor.TryEnter(list, 10000)) throw new UnableToAcquireLockInReasonableTimeException();
-                try
-                {
-                    int endIdx = list.UpperBound(new Entry(number, long.MaxValue));
-                    if (endIdx == -1)
-                        return false;
+			if (!Monitor.TryEnter(list, 10000))
+				throw new UnableToAcquireLockInReasonableTimeException();
+			try {
+				for (int i = 0, n = collection.Count; i < n; ++i) {
+					var entry = collection[i];
+					if (entry.Stream != stream)
+						throw new Exception("Not all index entries in a bulk have the same stream hash.");
+					Ensure.Nonnegative(entry.Version, "entry.Version");
+					Ensure.Nonnegative(entry.Position, "entry.Position");
+					list.Add(new Entry(entry.Version, entry.Position), 0);
+				}
+			} finally {
+				Monitor.Exit(list);
+			}
+		}
 
-                    var key = list.Keys[endIdx];
-                    if (key.EvNum == number)
-                    {
-                        position = key.LogPos;
-                        return true;
-                    }
-                }
-                finally
-                {
-                    Monitor.Exit(list);
-                }
-            }
-            return false;
-        }
+		public bool TryGetOneValue(ulong stream, long number, out long position) {
+			if (number < 0)
+				throw new ArgumentOutOfRangeException("number");
+			ulong hash = GetHash(stream);
 
-        public bool TryGetLatestEntry(uint stream, out IndexEntry entry)
-        {
-            entry = TableIndex.InvalidIndexEntry;
+			position = 0;
 
-            SortedList<Entry, byte> list;
-            if (_hash.TryGetValue(stream, out list))
-            {
-                if (!Monitor.TryEnter(list, 10000))
-                    throw new UnableToAcquireLockInReasonableTimeException();
-                try
-                {
-                    var latest = list.Keys[list.Count - 1];
-                    entry = new IndexEntry(stream, latest.EvNum, latest.LogPos);
-                    return true;
-                }
-                finally
-                {
-                    Monitor.Exit(list);
-                }
-            }
-            return false;
-        }
+			SortedList<Entry, byte> list;
+			if (_hash.TryGetValue(hash, out list)) {
+				if (!Monitor.TryEnter(list, 10000)) throw new UnableToAcquireLockInReasonableTimeException();
+				try {
+					int endIdx = list.UpperBound(new Entry(number, long.MaxValue));
+					if (endIdx == -1)
+						return false;
 
-        public bool TryGetOldestEntry(uint stream, out IndexEntry entry)
-        {
-            entry = TableIndex.InvalidIndexEntry;
+					var key = list.Keys[endIdx];
+					if (key.EvNum == number) {
+						position = key.LogPos;
+						return true;
+					}
+				} finally {
+					Monitor.Exit(list);
+				}
+			}
 
-            SortedList<Entry, byte> list;
-            if (_hash.TryGetValue(stream, out list))
-            {
-                if (!Monitor.TryEnter(list, 10000))
-                    throw new UnableToAcquireLockInReasonableTimeException();
-                try
-                {
-                    var oldest = list.Keys[0];
-                    entry = new IndexEntry(stream, oldest.EvNum, oldest.LogPos);
-                    return true;
-                }
-                finally
-                {
-                    Monitor.Exit(list);
-                }
-            }
-            return false;
-        }
+			return false;
+		}
 
-        public IEnumerable<IndexEntry> IterateAllInOrder()
-        {
-            //Log.Trace("Sorting array in HashListMemTable.IterateAllInOrder...");
+		public bool TryGetLatestEntry(ulong stream, out IndexEntry entry) {
+			ulong hash = GetHash(stream);
+			entry = TableIndex.InvalidIndexEntry;
 
-            var keys = _hash.Keys.ToArray();
-            Array.Sort(keys, new ReverseComparer<uint>());
-            
-            foreach (var key in keys)
-            {
-                var list = _hash[key];
-                for (int i = list.Count - 1; i >= 0; --i)
-                {
-                    var x = list.Keys[i];
-                    yield return new IndexEntry(key, x.EvNum, x.LogPos);
-                }
-            }
-            //Log.Trace("Sorting array in HashListMemTable.IterateAllInOrder... DONE!");
-        }
+			SortedList<Entry, byte> list;
+			if (_hash.TryGetValue(hash, out list)) {
+				if (!Monitor.TryEnter(list, 10000))
+					throw new UnableToAcquireLockInReasonableTimeException();
+				try {
+					var latest = list.Keys[list.Count - 1];
+					entry = new IndexEntry(hash, latest.EvNum, latest.LogPos);
+					return true;
+				} finally {
+					Monitor.Exit(list);
+				}
+			}
 
-        public void Clear()
-        {
-            _hash.Clear();
-        }
+			return false;
+		}
 
-        public IEnumerable<IndexEntry> GetRange(uint stream, int startNumber, int endNumber)
-        {
-            if (startNumber < 0)
-                throw new ArgumentOutOfRangeException("startNumber");
-            if (endNumber < 0)
-                throw new ArgumentOutOfRangeException("endNumber");
+		public bool TryGetOldestEntry(ulong stream, out IndexEntry entry) {
+			ulong hash = GetHash(stream);
+			entry = TableIndex.InvalidIndexEntry;
 
-            var ret = new List<IndexEntry>();
+			SortedList<Entry, byte> list;
+			if (_hash.TryGetValue(hash, out list)) {
+				if (!Monitor.TryEnter(list, 10000))
+					throw new UnableToAcquireLockInReasonableTimeException();
+				try {
+					var oldest = list.Keys[0];
+					entry = new IndexEntry(hash, oldest.EvNum, oldest.LogPos);
+					return true;
+				} finally {
+					Monitor.Exit(list);
+				}
+			}
 
-            SortedList<Entry, byte> list;
-            if (_hash.TryGetValue(stream, out list))
-            {
-                if (!Monitor.TryEnter(list, 10000)) throw new UnableToAcquireLockInReasonableTimeException();
-                try
-                {
-                    var endIdx = list.UpperBound(new Entry(endNumber, long.MaxValue));
-                    for (int i = endIdx; i >= 0; i--)
-                    {
-                        var key = list.Keys[i];
-                        if (key.EvNum < startNumber)
-                            break;
-                        ret.Add(new IndexEntry(stream, version: key.EvNum, position: key.LogPos));
-                    }
-                }
-                finally
-                {
-                    Monitor.Exit(list);
-                }
-            }
-            return ret;
-        }
+			return false;
+		}
 
-        private struct Entry
-        {
-            public readonly int EvNum;
-            public readonly long LogPos;
+		public IEnumerable<IndexEntry> IterateAllInOrder() {
+			//Log.Trace("Sorting array in HashListMemTable.IterateAllInOrder...");
 
-            public Entry(int evNum, long logPos)
-            {
-                EvNum = evNum;
-                LogPos = logPos;
-            }
-        }
+			var keys = _hash.Keys.ToArray();
+			Array.Sort(keys, new ReverseComparer<ulong>());
 
-        private class EntryComparer : IComparer<Entry>
-        {
-            public int Compare(Entry x, Entry y)
-            {
-                if (x.EvNum < y.EvNum) return -1;
-                if (x.EvNum > y.EvNum) return 1;
-                if (x.LogPos < y.LogPos) return -1;
-                if (x.LogPos > y.LogPos) return 1;
-                return 0;
-            }
-        }
-    }
+			foreach (var key in keys) {
+				var list = _hash[key];
+				for (int i = list.Count - 1; i >= 0; --i) {
+					var x = list.Keys[i];
+					yield return new IndexEntry(key, x.EvNum, x.LogPos);
+				}
+			}
 
-    public class ReverseComparer<T> : IComparer<T> where T : IComparable
-    {
-        public int Compare(T x, T y)
-        {
-            return -x.CompareTo(y);
-        }
-    }
+			//Log.Trace("Sorting array in HashListMemTable.IterateAllInOrder... DONE!");
+		}
+
+		public void Clear() {
+			_hash.Clear();
+		}
+
+		public IEnumerable<IndexEntry> GetRange(ulong stream, long startNumber, long endNumber, int? limit = null) {
+			if (startNumber < 0)
+				throw new ArgumentOutOfRangeException("startNumber");
+			if (endNumber < 0)
+				throw new ArgumentOutOfRangeException("endNumber");
+
+			ulong hash = GetHash(stream);
+			var ret = new List<IndexEntry>();
+
+			SortedList<Entry, byte> list;
+			if (_hash.TryGetValue(hash, out list)) {
+				if (!Monitor.TryEnter(list, 10000)) throw new UnableToAcquireLockInReasonableTimeException();
+				try {
+					var endIdx = list.UpperBound(new Entry(endNumber, long.MaxValue));
+					for (int i = endIdx; i >= 0; i--) {
+						var key = list.Keys[i];
+						if (key.EvNum < startNumber || ret.Count == limit)
+							break;
+						ret.Add(new IndexEntry(hash, version: key.EvNum, position: key.LogPos));
+					}
+				} finally {
+					Monitor.Exit(list);
+				}
+			}
+
+			return ret;
+		}
+
+		private ulong GetHash(ulong hash) {
+			return _version == PTableVersions.IndexV1 ? hash >> 32 : hash;
+		}
+
+		private struct Entry {
+			public readonly long EvNum;
+			public readonly long LogPos;
+
+			public Entry(long evNum, long logPos) {
+				EvNum = evNum;
+				LogPos = logPos;
+			}
+		}
+
+		private class EntryComparer : IComparer<Entry> {
+			public int Compare(Entry x, Entry y) {
+				if (x.EvNum < y.EvNum) return -1;
+				if (x.EvNum > y.EvNum) return 1;
+				if (x.LogPos < y.LogPos) return -1;
+				if (x.LogPos > y.LogPos) return 1;
+				return 0;
+			}
+		}
+	}
+
+	public class ReverseComparer<T> : IComparer<T> where T : IComparable {
+		public int Compare(T x, T y) {
+			return -x.CompareTo(y);
+		}
+	}
 }

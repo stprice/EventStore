@@ -1,22 +1,26 @@
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 
-namespace EventStore.Core.Index
-{
-    public interface ITableIndex
-    {
-        long CommitCheckpoint { get; }
-        long PrepareCheckpoint { get; }
+namespace EventStore.Core.Index {
+	public interface ITableIndex {
+		long CommitCheckpoint { get; }
+		long PrepareCheckpoint { get; }
 
-        void Initialize(long chaserCheckpoint);
-        void Close(bool removeFiles = true);
+		void Initialize(long chaserCheckpoint);
+		void Close(bool removeFiles = true);
 
-        void Add(long commitPos, uint stream, int version, long position);
-        void AddEntries(long commitPos, IList<IndexEntry> entries);
-        
-        bool TryGetOneValue(uint stream, int version, out long position);
-        bool TryGetLatestEntry(uint stream, out IndexEntry entry);
-        bool TryGetOldestEntry(uint stream, out IndexEntry entry);
+		void Add(long commitPos, string streamId, long version, long position);
+		void AddEntries(long commitPos, IList<IndexKey> entries);
 
-        IEnumerable<IndexEntry> GetRange(uint stream, int startVersion, int endVersion);
-    }
+		bool TryGetOneValue(string streamId, long version, out long position);
+		bool TryGetLatestEntry(string streamId, out IndexEntry entry);
+		bool TryGetOldestEntry(string streamId, out IndexEntry entry);
+
+		IEnumerable<IndexEntry> GetRange(string streamId, long startVersion, long endVersion, int? limit = null);
+
+		void Scavenge(IIndexScavengerLog log, CancellationToken ct);
+		Task MergeIndexes();
+		bool IsBackgroundTaskRunning { get; }
+	}
 }

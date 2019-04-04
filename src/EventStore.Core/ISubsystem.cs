@@ -1,10 +1,11 @@
-﻿namespace EventStore.Core
-{
-    public interface ISubsystem
-    {
-        void Register(StandardComponents standardComponents);
+﻿using System.Collections.Generic;
+using System.Threading.Tasks;
 
-        void Start();
-        void Stop();
-    }
+namespace EventStore.Core {
+	public interface ISubsystem {
+		void Register(StandardComponents standardComponents);
+
+		IEnumerable<Task> Start();
+		void Stop();
+	}
 }

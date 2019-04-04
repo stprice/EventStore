@@ -14,229 +14,236 @@ using EventStore.Transport.Tcp.Formatting;
 using EventStore.Transport.Tcp.Framing;
 using Connection = EventStore.Transport.Tcp.TcpTypedConnection<byte[]>;
 
-namespace EventStore.TestClient
-{
-    public class Client
-    {
-        private static readonly ILogger Log = LogManager.GetLoggerFor<Client>();
+namespace EventStore.TestClient {
+	public class Client {
+		private static readonly ILogger Log = LogManager.GetLoggerFor<Client>();
 
-        public readonly bool InteractiveMode;
+		public readonly bool InteractiveMode;
 
-        public readonly ClientOptions Options;
-        public readonly IPEndPoint TcpEndpoint;
-        public readonly IPEndPoint HttpEndpoint;
+		public readonly ClientOptions Options;
+		public readonly IPEndPoint TcpEndpoint;
+		public readonly IPEndPoint HttpEndpoint;
+		public readonly bool UseSsl;
+		public readonly string TargetHost;
+		public readonly bool ValidateServer;
 
-        private readonly BufferManager _bufferManager = new BufferManager(TcpConfiguration.BufferChunksCount, TcpConfiguration.SocketBufferSize);
-        private readonly TcpClientConnector _connector = new TcpClientConnector();
+		private readonly BufferManager _bufferManager =
+			new BufferManager(TcpConfiguration.BufferChunksCount, TcpConfiguration.SocketBufferSize);
 
-        private readonly CommandsProcessor _commands = new CommandsProcessor(Log);
+		private readonly TcpClientConnector _connector = new TcpClientConnector();
 
-        public Client(ClientOptions options)
-        {
-            Options = options;
+		private readonly CommandsProcessor _commands = new CommandsProcessor(Log);
 
-            TcpEndpoint = new IPEndPoint(options.Ip, options.TcpPort);
-            HttpEndpoint = new IPEndPoint(options.Ip, options.HttpPort);
+		public Client(ClientOptions options) {
+			Options = options;
 
-            InteractiveMode = options.Command.IsEmpty();
+			TcpEndpoint = new IPEndPoint(options.Ip, options.TcpPort);
+			HttpEndpoint = new IPEndPoint(options.Ip, options.HttpPort);
 
-            RegisterProcessors();
-        }
+			UseSsl = options.UseSsl;
+			TargetHost = options.TargetHost;
+			ValidateServer = options.ValidateServer;
 
-        private void RegisterProcessors()
-        {
-            _commands.Register(new UsageProcessor(_commands), usageProcessor: true);
-            _commands.Register(new ExitProcessor());
-            
-            _commands.Register(new PingProcessor());
-            _commands.Register(new PingFloodProcessor());
-            _commands.Register(new PingFloodWaitingProcessor());
+			InteractiveMode = options.Command.IsEmpty();
 
-            _commands.Register(new WriteProcessor());
-            _commands.Register(new WriteJsonProcessor());
-            _commands.Register(new WriteFloodProcessor());
-            _commands.Register(new WriteFloodClientApiProcessor());
-            _commands.Register(new WriteFloodWaitingProcessor());
+			RegisterProcessors();
+		}
 
-            _commands.Register(new MultiWriteProcessor());
-            _commands.Register(new MultiWriteFloodWaitingProcessor());
+		private void RegisterProcessors() {
+			_commands.Register(new UsageProcessor(_commands), usageProcessor: true);
+			_commands.Register(new ExitProcessor());
 
-            _commands.Register(new TransactionWriteProcessor());
-            
-            _commands.Register(new DeleteProcessor());
+			_commands.Register(new PingProcessor());
+			_commands.Register(new PingFloodProcessor());
+			_commands.Register(new PingFloodWaitingProcessor());
 
-            _commands.Register(new ReadAllProcessor());
-            _commands.Register(new ReadProcessor());
-            _commands.Register(new ReadFloodProcessor());
+			_commands.Register(new WriteProcessor());
+			_commands.Register(new WriteJsonProcessor());
+			_commands.Register(new WriteFloodProcessor());
+			_commands.Register(new WriteFloodClientApiProcessor());
+			_commands.Register(new WriteFloodWaitingProcessor());
 
-            _commands.Register(new WriteLongTermProcessor());
+			_commands.Register(new MultiWriteProcessor());
+			_commands.Register(new MultiWriteFloodWaitingProcessor());
 
-            _commands.Register(new DvuBasicProcessor());
-            _commands.Register(new RunTestScenariosProcessor());
+			_commands.Register(new TransactionWriteProcessor());
 
-            _commands.Register(new SubscribeToStreamProcessor());
+			_commands.Register(new DeleteProcessor());
 
-            _commands.Register(new ScavengeProcessor());
+			_commands.Register(new ReadAllProcessor());
+			_commands.Register(new ReadProcessor());
+			_commands.Register(new ReadFloodProcessor());
 
-            _commands.Register(new TcpSanitazationCheckProcessor());
+			_commands.Register(new WriteLongTermProcessor());
 
-            _commands.Register(new SubscriptionStressTestProcessor());
-        }
+			_commands.Register(new DvuBasicProcessor());
+			_commands.Register(new RunTestScenariosProcessor());
 
-        public int Run()
-        {
-            if (!InteractiveMode)
-                return Execute(Options.Command.ToArray());
+			_commands.Register(new SubscribeToStreamProcessor());
 
-            new Thread(() =>
-            {
-                Thread.Sleep(100);
-                Console.Write(">>> ");
+			_commands.Register(new ScavengeProcessor());
 
-                string line;
-                while ((line = Console.ReadLine()) != null)
-                {
-                    try
-                    {
-                        if (string.IsNullOrWhiteSpace(line))
-                            continue;
+			_commands.Register(new TcpSanitazationCheckProcessor());
 
-                        try
-                        {
-                            var args = ParseCommandLine(line);
-                            Execute(args);
-                        }
-                        catch (Exception exc)
-                        {
-                            Log.ErrorException(exc, "Error during executing command.");
-                        }
-                    }
-                    finally
-                    {
-                        Thread.Sleep(100);
-                        Console.Write(">>> ");
-                    }
-                }
-            }) { IsBackground = true, Name = "Client Main Loop Thread" }.Start();
-            return 0;
-        }
+			_commands.Register(new SubscriptionStressTestProcessor());
+		}
 
-        private static string[] ParseCommandLine(string line)
-        {
-            return line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        }
+		public int Run() {
+			if (!InteractiveMode) {
+				var args = ParseCommandLine(Options.Command[0]);
+				return Execute(args);
+			}
 
-        private int Execute(string[] args)
-        {
-            Log.Info("Processing command: {0}.", string.Join(" ", args));
+			new Thread(() => {
+				Thread.Sleep(100);
+				Console.Write(">>> ");
 
-            var context = new CommandProcessorContext(this, Log, new ManualResetEventSlim(true));
+				string line;
+				while ((line = Console.ReadLine()) != null) {
+					try {
+						if (string.IsNullOrWhiteSpace(line))
+							continue;
 
-            int exitCode;
-            if (_commands.TryProcess(context, args, out exitCode))
-            {
-                Log.Info("Command exited with code {0}.", exitCode);
-                return exitCode;
-            }
+						try {
+							var args = ParseCommandLine(line);
+							Execute(args);
+						} catch (Exception exc) {
+							Log.ErrorException(exc, "Error during executing command.");
+						}
+					} finally {
+						Thread.Sleep(100);
+						Console.Write(">>> ");
+					}
+				}
+			}) {IsBackground = true, Name = "Client Main Loop Thread"}.Start();
+			return 0;
+		}
 
-            return exitCode;
-        }
+		private static string[] ParseCommandLine(string line) {
+			return line.Split(new[] {' ', '\t'}, StringSplitOptions.RemoveEmptyEntries);
+		}
 
-        public Connection CreateTcpConnection(CommandProcessorContext context, 
-                                              Action<Connection, TcpPackage> handlePackage,
-                                              Action<Connection> connectionEstablished = null,
-                                              Action<Connection, SocketError> connectionClosed = null,
-                                              bool failContextOnError = true,
-                                              IPEndPoint tcpEndPoint = null)
-        {
-            var connectionCreatedEvent = new ManualResetEventSlim(false);
-            Connection typedConnection = null;
+		private int Execute(string[] args) {
+			Log.Info("Processing command: {command}.", string.Join(" ", args));
 
-            var connection = _connector.ConnectTo(
-                Guid.NewGuid(),
-                tcpEndPoint ?? TcpEndpoint,
-                TcpConnectionManager.ConnectionTimeout,
-                conn =>
-                {
-                    // we execute callback on ThreadPool because on FreeBSD it can be called synchronously
-                    // causing deadlock
-                    ThreadPool.QueueUserWorkItem(_ => 
-                    {
-                        if (!InteractiveMode)
-                            Log.Info("TcpTypedConnection: connected to [{0}, L{1}, {2:B}].", conn.RemoteEndPoint, conn.LocalEndPoint, conn.ConnectionId);
-                        if (connectionEstablished != null)
-                        {
-                            if (!connectionCreatedEvent.Wait(10000))
-                                throw new Exception("TcpTypedConnection: creation took too long!");
-                            connectionEstablished(typedConnection);
-                        }
-                    });
-                },
-                (conn, error) =>
-                {
-                    var message = string.Format("TcpTypedConnection: connection to [{0}, L{1}, {2:B}] failed. Error: {3}.",
-                                                conn.RemoteEndPoint, conn.LocalEndPoint, conn.ConnectionId, error);
-                    Log.Error(message);
+			var context = new CommandProcessorContext(this, Log, new ManualResetEventSlim(true));
 
-                    if (connectionClosed != null)
-                        connectionClosed(null, error);
+			int exitCode;
+			if (_commands.TryProcess(context, args, out exitCode)) {
+				Log.Info("Command exited with code {exitCode}.", exitCode);
+				return exitCode;
+			}
 
-                    if (failContextOnError)
-                        context.Fail(reason: string.Format("Socket connection failed with error {0}.", error));
-                },
-                verbose: !InteractiveMode);
+			return exitCode;
+		}
 
-            typedConnection = new Connection(connection, new RawMessageFormatter(_bufferManager), new LengthPrefixMessageFramer());
-            typedConnection.ConnectionClosed +=
-                (conn, error) =>
-                {
-                    if (!InteractiveMode || error != SocketError.Success)
-                    {
-                        Log.Info("TcpTypedConnection: connection [{0}, L{1}] was closed {2}",
-                                 conn.RemoteEndPoint, conn.LocalEndPoint,
-                                 error == SocketError.Success ? "cleanly." : "with error: " + error + ".");
-                    }
+		public Connection CreateTcpConnection(CommandProcessorContext context,
+			Action<Connection, TcpPackage> handlePackage,
+			Action<Connection> connectionEstablished = null,
+			Action<Connection, SocketError> connectionClosed = null,
+			bool failContextOnError = true,
+			IPEndPoint tcpEndPoint = null) {
+			var connectionCreatedEvent = new ManualResetEventSlim(false);
+			Connection typedConnection = null;
 
-                    if (connectionClosed != null)
-                        connectionClosed(conn, error);
-                    else
-                        Log.Info("connectionClosed callback was null");
-                };
-            connectionCreatedEvent.Set();
+			Action<ITcpConnection> onConnectionEstablished = conn => {
+				// we execute callback on ThreadPool because on FreeBSD it can be called synchronously
+				// causing deadlock
+				ThreadPool.QueueUserWorkItem(_ => {
+					if (!InteractiveMode)
+						Log.Info(
+							"TcpTypedConnection: connected to [{remoteEndPoint}, L{localEndPoint}, {connectionId:B}].",
+							conn.RemoteEndPoint, conn.LocalEndPoint, conn.ConnectionId);
+					if (connectionEstablished != null) {
+						if (!connectionCreatedEvent.Wait(10000))
+							throw new Exception("TcpTypedConnection: creation took too long!");
+						connectionEstablished(typedConnection);
+					}
+				});
+			};
+			Action<ITcpConnection, SocketError> onConnectionFailed = (conn, error) => {
+				Log.Error(
+					"TcpTypedConnection: connection to [{remoteEndPoint}, L{localEndPoint}, {connectionId:B}] failed. Error: {e}.",
+					conn.RemoteEndPoint, conn.LocalEndPoint, conn.ConnectionId, error);
 
-            typedConnection.ReceiveAsync(
-                (conn, pkg) =>
-                {
-                    var package = new TcpPackage();
-                    bool validPackage = false;
-                    try
-                    {
-                        package = TcpPackage.FromArraySegment(new ArraySegment<byte>(pkg));
-                        validPackage = true;
+				if (connectionClosed != null)
+					connectionClosed(null, error);
 
-                        if (package.Command == TcpCommand.HeartbeatRequestCommand)
-                        {
-                            var resp = new TcpPackage(TcpCommand.HeartbeatResponseCommand, Guid.NewGuid(), null);
-                            conn.EnqueueSend(resp.AsByteArray());
-                            return;
-                        }
+				if (failContextOnError)
+					context.Fail(reason: string.Format("Socket connection failed with error {0}.", error));
+			};
 
-                        handlePackage(conn, package);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.InfoException(ex,
-                                          "TcpTypedConnection: [{0}, L{1}] ERROR for {2}. Connection will be closed.",
-                                          conn.RemoteEndPoint, conn.LocalEndPoint,
-                                          validPackage ? package.Command as object : "<invalid package>");
-                        conn.Close(ex.Message);
+			ITcpConnection connection;
+			if (UseSsl) {
+				if (string.IsNullOrEmpty(TargetHost)) {
+					context.Fail(reason: "TargetHost is required if using SSL");
+				}
 
-                        if (failContextOnError)
-                            context.Fail(ex);
-                    }
-                });
+				connection = _connector.ConnectSslTo(
+					Guid.NewGuid(),
+					tcpEndPoint ?? TcpEndpoint,
+					TcpConnectionManager.ConnectionTimeout,
+					TargetHost,
+					ValidateServer,
+					onConnectionEstablished,
+					onConnectionFailed,
+					verbose: !InteractiveMode);
+			} else {
+				connection = _connector.ConnectTo(
+					Guid.NewGuid(),
+					tcpEndPoint ?? TcpEndpoint,
+					TcpConnectionManager.ConnectionTimeout,
+					onConnectionEstablished,
+					onConnectionFailed,
+					verbose: !InteractiveMode);
+			}
 
-            return typedConnection;
-        }
-    }
+			typedConnection = new Connection(connection, new RawMessageFormatter(_bufferManager),
+				new LengthPrefixMessageFramer());
+			typedConnection.ConnectionClosed +=
+				(conn, error) => {
+					if (!InteractiveMode || error != SocketError.Success) {
+						Log.Info(
+							"TcpTypedConnection: connection [{remoteEndPoint}, L{localEndPoint}] was closed {status}",
+							conn.RemoteEndPoint, conn.LocalEndPoint,
+							error == SocketError.Success ? "cleanly." : "with error: " + error + ".");
+					}
+
+					if (connectionClosed != null)
+						connectionClosed(conn, error);
+					else
+						Log.Info("connectionClosed callback was null");
+				};
+			connectionCreatedEvent.Set();
+
+			typedConnection.ReceiveAsync(
+				(conn, pkg) => {
+					var package = new TcpPackage();
+					bool validPackage = false;
+					try {
+						package = TcpPackage.FromArraySegment(new ArraySegment<byte>(pkg));
+						validPackage = true;
+
+						if (package.Command == TcpCommand.HeartbeatRequestCommand) {
+							var resp = new TcpPackage(TcpCommand.HeartbeatResponseCommand, Guid.NewGuid(), null);
+							conn.EnqueueSend(resp.AsByteArray());
+							return;
+						}
+
+						handlePackage(conn, package);
+					} catch (Exception ex) {
+						Log.InfoException(ex,
+							"TcpTypedConnection: [{remoteEndPoint}, L{localEndPoint}] ERROR for {package}. Connection will be closed.",
+							conn.RemoteEndPoint, conn.LocalEndPoint,
+							validPackage ? package.Command as object : "<invalid package>");
+						conn.Close(ex.Message);
+
+						if (failContextOnError)
+							context.Fail(ex);
+					}
+				});
+
+			return typedConnection;
+		}
+	}
 }

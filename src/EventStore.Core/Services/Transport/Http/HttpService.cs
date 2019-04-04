@@ -12,137 +12,141 @@ using EventStore.Core.Settings;
 using EventStore.Transport.Http.EntityManagement;
 using EventStore.Transport.Http.Server;
 
-namespace EventStore.Core.Services.Transport.Http
-{
-    public class HttpService : IHttpService,
-                               IHandle<SystemMessage.SystemInit>,
-                               IHandle<SystemMessage.BecomeShuttingDown>,
-                               IHandle<HttpMessage.PurgeTimedOutRequests>
-    {
-        private static readonly TimeSpan UpdateInterval = TimeSpan.FromSeconds(1);
+namespace EventStore.Core.Services.Transport.Http {
+	public class HttpService : IHttpService,
+		IHandle<SystemMessage.SystemInit>,
+		IHandle<SystemMessage.BecomeShuttingDown>,
+		IHandle<HttpMessage.PurgeTimedOutRequests> {
+		private static readonly TimeSpan UpdateInterval = TimeSpan.FromSeconds(1);
 
-        public bool IsListening { get { return _server.IsListening; } }
-        public IEnumerable<string> ListenPrefixes { get { return _server._listenPrefixes; } }
-        public ServiceAccessibility Accessibility { get { return _accessibility; } }
+		public bool IsListening {
+			get { return _server.IsListening; }
+		}
 
-        private readonly ServiceAccessibility _accessibility;
-        private readonly IPublisher _inputBus;
-        private readonly IUriRouter _uriRouter;
-        private readonly IEnvelope _publishEnvelope;
+		public IEnumerable<string> ListenPrefixes {
+			get { return _server._listenPrefixes; }
+		}
 
-        private readonly HttpAsyncServer _server;
-        private readonly MultiQueuedHandler _requestsMultiHandler;
+		public ServiceAccessibility Accessibility {
+			get { return _accessibility; }
+		}
 
-        public HttpService(ServiceAccessibility accessibility, IPublisher inputBus, IUriRouter uriRouter,
-                           MultiQueuedHandler multiQueuedHandler, params string[] prefixes)
-        {
-            Ensure.NotNull(inputBus, "inputBus");
-            Ensure.NotNull(uriRouter, "uriRouter");
-            Ensure.NotNull(prefixes, "prefixes");
+		private readonly ServiceAccessibility _accessibility;
+		private readonly IPublisher _inputBus;
+		private readonly IUriRouter _uriRouter;
+		private readonly IEnvelope _publishEnvelope;
+		private readonly bool _logHttpRequests;
 
-            _accessibility = accessibility;
-            _inputBus = inputBus;
-            _uriRouter = uriRouter;
-            _publishEnvelope = new PublishEnvelope(inputBus);
+		private readonly HttpAsyncServer _server;
+		private readonly MultiQueuedHandler _requestsMultiHandler;
 
-            _requestsMultiHandler = multiQueuedHandler;
+		private IPAddress _advertiseAsAddress;
+		private int _advertiseAsPort;
 
-            _server = new HttpAsyncServer(prefixes);
-            _server.RequestReceived += RequestReceived;
-        }
+		public HttpService(ServiceAccessibility accessibility, IPublisher inputBus, IUriRouter uriRouter,
+			MultiQueuedHandler multiQueuedHandler, bool logHttpRequests, IPAddress advertiseAsAddress,
+			int advertiseAsPort, params string[] prefixes) {
+			Ensure.NotNull(inputBus, "inputBus");
+			Ensure.NotNull(uriRouter, "uriRouter");
+			Ensure.NotNull(prefixes, "prefixes");
 
-        public static void CreateAndSubscribePipeline(IBus bus, HttpAuthenticationProvider[] httpAuthenticationProviders)
-        {
-            Ensure.NotNull(bus, "bus");
-            Ensure.NotNull(httpAuthenticationProviders, "httpAuthenticationProviders");
+			_accessibility = accessibility;
+			_inputBus = inputBus;
+			_uriRouter = uriRouter;
+			_publishEnvelope = new PublishEnvelope(inputBus);
 
-            // ReSharper disable RedundantTypeArgumentsOfMethod
-            var requestAuthenticationManager = new IncomingHttpRequestAuthenticationManager(httpAuthenticationProviders);
-            bus.Subscribe<IncomingHttpRequestMessage>(requestAuthenticationManager);
-            // ReSharper restore RedundantTypeArgumentsOfMethod
+			_requestsMultiHandler = multiQueuedHandler;
+			_logHttpRequests = logHttpRequests;
 
-            var requestProcessor = new AuthenticatedHttpRequestProcessor();
-            bus.Subscribe<AuthenticatedHttpRequestMessage>(requestProcessor);
-            bus.Subscribe<HttpMessage.PurgeTimedOutRequests>(requestProcessor);
-        }
+			_server = new HttpAsyncServer(prefixes);
+			_server.RequestReceived += RequestReceived;
 
-        public void Handle(SystemMessage.SystemInit message)
-        {
-            if (_server.TryStart())
-            {
-                _inputBus.Publish(
-                    TimerMessage.Schedule.Create(
-                        UpdateInterval, _publishEnvelope, new HttpMessage.PurgeTimedOutRequests(_accessibility)));
-            }
-            else
-            {
-                Application.Exit(ExitCode.Error,
-                                 string.Format("HTTP async server failed to start listening at [{0}].", 
-                                               string.Join(", ", _server._listenPrefixes)));
-            }
-        }
+			_advertiseAsAddress = advertiseAsAddress;
+			_advertiseAsPort = advertiseAsPort;
+		}
 
-        public void Handle(SystemMessage.BecomeShuttingDown message)
-        {
-            if (message.ShutdownHttp)
-                Shutdown();
-            _inputBus.Publish(
-                new SystemMessage.ServiceShutdown(
-                    string.Format("HttpServer [{0}]", string.Join(", ", _server._listenPrefixes))));
-        }
+		public static void CreateAndSubscribePipeline(IBus bus,
+			HttpAuthenticationProvider[] httpAuthenticationProviders) {
+			Ensure.NotNull(bus, "bus");
+			Ensure.NotNull(httpAuthenticationProviders, "httpAuthenticationProviders");
 
-        private void RequestReceived(HttpAsyncServer sender, HttpListenerContext context)
-        {
-            var entity = new HttpEntity(context.Request, context.Response, context.User);
-            _requestsMultiHandler.Handle(new IncomingHttpRequestMessage(this, entity, _requestsMultiHandler));
-        }
+			// ReSharper disable RedundantTypeArgumentsOfMethod
+			var requestAuthenticationManager =
+				new IncomingHttpRequestAuthenticationManager(httpAuthenticationProviders);
+			bus.Subscribe<IncomingHttpRequestMessage>(requestAuthenticationManager);
+			// ReSharper restore RedundantTypeArgumentsOfMethod
 
-        public void Handle(HttpMessage.PurgeTimedOutRequests message)
-        {
-            if (_accessibility != message.Accessibility)
-                return;
+			var requestProcessor = new AuthenticatedHttpRequestProcessor();
+			bus.Subscribe<AuthenticatedHttpRequestMessage>(requestProcessor);
+			bus.Subscribe<HttpMessage.PurgeTimedOutRequests>(requestProcessor);
+		}
 
-            _requestsMultiHandler.PublishToAll(message);
+		public void Handle(SystemMessage.SystemInit message) {
+			if (_server.TryStart()) {
+				_inputBus.Publish(
+					TimerMessage.Schedule.Create(
+						UpdateInterval, _publishEnvelope, new HttpMessage.PurgeTimedOutRequests(_accessibility)));
+			} else {
+				Application.Exit(ExitCode.Error,
+					string.Format("HTTP async server failed to start listening at [{0}].",
+						string.Join(", ", _server._listenPrefixes)));
+			}
+		}
 
-            _inputBus.Publish(
-                TimerMessage.Schedule.Create(
-                    UpdateInterval, _publishEnvelope, new HttpMessage.PurgeTimedOutRequests(_accessibility)));
-        }
+		public void Handle(SystemMessage.BecomeShuttingDown message) {
+			if (message.ShutdownHttp)
+				Shutdown();
+			_inputBus.Publish(
+				new SystemMessage.ServiceShutdown(
+					string.Format("HttpServer [{0}]", string.Join(", ", _server._listenPrefixes))));
+		}
 
-        public void Shutdown()
-        {
-            _server.Shutdown();
-        }
+		private void RequestReceived(HttpAsyncServer sender, HttpListenerContext context) {
+			var entity = new HttpEntity(context.Request, context.Response, context.User, _logHttpRequests,
+				_advertiseAsAddress, _advertiseAsPort);
+			_requestsMultiHandler.Handle(new IncomingHttpRequestMessage(this, entity, _requestsMultiHandler));
+		}
 
-        public void SetupController(IHttpController controller)
-        {
-            Ensure.NotNull(controller, "controller");
-            controller.Subscribe(this);
-        }
+		public void Handle(HttpMessage.PurgeTimedOutRequests message) {
+			if (_accessibility != message.Accessibility)
+				return;
 
-        public void RegisterCustomAction(ControllerAction action, Func<HttpEntityManager, UriTemplateMatch, RequestParams> handler)
-        {
-            Ensure.NotNull(action, "action");
-            Ensure.NotNull(handler, "handler");
+			_requestsMultiHandler.PublishToAll(message);
 
-            _uriRouter.RegisterAction(action, handler);
-        }
+			_inputBus.Publish(
+				TimerMessage.Schedule.Create(
+					UpdateInterval, _publishEnvelope, new HttpMessage.PurgeTimedOutRequests(_accessibility)));
+		}
 
-        public void RegisterAction(ControllerAction action, Action<HttpEntityManager, UriTemplateMatch> handler)
-        {
-            Ensure.NotNull(action, "action");
-            Ensure.NotNull(handler, "handler");
+		public void Shutdown() {
+			_server.Shutdown();
+		}
 
-            _uriRouter.RegisterAction(action, (man, match) =>
-            {
-                handler(man, match);
-                return new RequestParams(ESConsts.HttpTimeout);
-            });
-        }
+		public void SetupController(IHttpController controller) {
+			Ensure.NotNull(controller, "controller");
+			controller.Subscribe(this);
+		}
 
-        public List<UriToActionMatch> GetAllUriMatches(Uri uri)
-        {
-            return _uriRouter.GetAllUriMatches(uri);
-        }
-    }
+		public void RegisterCustomAction(ControllerAction action,
+			Func<HttpEntityManager, UriTemplateMatch, RequestParams> handler) {
+			Ensure.NotNull(action, "action");
+			Ensure.NotNull(handler, "handler");
+
+			_uriRouter.RegisterAction(action, handler);
+		}
+
+		public void RegisterAction(ControllerAction action, Action<HttpEntityManager, UriTemplateMatch> handler) {
+			Ensure.NotNull(action, "action");
+			Ensure.NotNull(handler, "handler");
+
+			_uriRouter.RegisterAction(action, (man, match) => {
+				handler(man, match);
+				return new RequestParams(ESConsts.HttpTimeout);
+			});
+		}
+
+		public List<UriToActionMatch> GetAllUriMatches(Uri uri) {
+			return _uriRouter.GetAllUriMatches(uri);
+		}
+	}
 }

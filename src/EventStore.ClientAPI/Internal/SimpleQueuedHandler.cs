@@ -4,45 +4,46 @@ using System.Threading;
 using EventStore.ClientAPI.Common.Utils;
 using System.Collections.Concurrent;
 
-namespace EventStore.ClientAPI.Internal
-{
-    internal class SimpleQueuedHandler
-    {
-        private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
-        private readonly Dictionary<Type, Action<Message>> _handlers = new Dictionary<Type, Action<Message>>();
-        private int _isProcessing;
+namespace EventStore.ClientAPI.Internal {
+	internal class SimpleQueuedHandler {
+		private readonly ILogger _log;
+		private readonly ConcurrentQueue<Message> _messageQueue = new ConcurrentQueue<Message>();
+		private readonly Dictionary<Type, Action<Message>> _handlers = new Dictionary<Type, Action<Message>>();
+		private int _isProcessing;
 
-        public void RegisterHandler<T>(Action<T> handler) where T : Message
-        {
-            Ensure.NotNull(handler, "handler");
-            _handlers.Add(typeof(T), msg => handler((T)msg));
-        }
+		public SimpleQueuedHandler(ILogger log) {
+			_log = log;
+		}
 
-        public void EnqueueMessage(Message message)
-        {
-            Ensure.NotNull(message, "message");
+		public void RegisterHandler<T>(Action<T> handler) where T : Message {
+			Ensure.NotNull(handler, "handler");
+			_handlers.Add(typeof(T), msg => handler((T)msg));
+		}
 
-            _messageQueue.Enqueue(message);
-            if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
-                ThreadPool.QueueUserWorkItem(ProcessQueue);
-        }
+		public void EnqueueMessage(Message message) {
+			Ensure.NotNull(message, "message");
 
-        private void ProcessQueue(object state)
-        {
-            do
-            {
-                Message message;
+			_messageQueue.Enqueue(message);
+			if (Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0)
+				ThreadPool.QueueUserWorkItem(ProcessQueue);
+		}
 
-                while (_messageQueue.TryDequeue(out message))
-                {
-                    Action<Message> handler;
-                    if (!_handlers.TryGetValue(message.GetType(), out handler))
-                        throw new Exception(string.Format("No handler registered for message {0}", message.GetType().Name));
-                    handler(message);
-                }
+		private void ProcessQueue(object state) {
+			do {
+				while (_messageQueue.TryDequeue(out var message)) {
+					if (!_handlers.TryGetValue(message.GetType(), out var handler)) {
+						_log.Error($"No handler registered for type {message.GetType().FullName}");
+					} else {
+						try {
+							handler(message);
+						} catch (Exception e) {
+							_log.Error(e, $"Error processing {message.GetType().FullName}");
+						}
+					}
+				}
 
-                Interlocked.Exchange(ref _isProcessing, 0);
-            } while (_messageQueue.Count > 0 && Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0);
-        }
-    }
+				Interlocked.Exchange(ref _isProcessing, 0);
+			} while (!_messageQueue.IsEmpty && Interlocked.CompareExchange(ref _isProcessing, 1, 0) == 0);
+		}
+	}
 }

@@ -1,110 +1,111 @@
+# Event Store
 
-#Event Store
+The open-source, functional database with Complex Event Processing in JavaScript.
 
-**The main documentation has moved to <a href="https://docs.geteventstore.com">https://docs.geteventstore.com</a>.**
+This is the repository for the open source version of Event Store, which includes the clustering implementation for high availability. 
 
-<em>**Development is on the branch aimed at the next release (usually prefixed with release-v0.0.0). Please make any pull requests to this branch**.</em>
+## Support
 
-This is the repository for the open source version of Event Store, which now includes the clustering implementation for high availability. Further information on commercial support and options such as LDAP authentication can be found on the Event Store website at http://geteventstore.com.
+Information on commercial support and options such as LDAP authentication can be found on the Event Store website at https://eventstore.org/support.
 
-##Building from Source
+## CI Status
+[![Build Status](https://dev.azure.com/EventStoreOSS/EventStore/_apis/build/status/EventStore.EventStore?branchName=master)](https://dev.azure.com/EventStoreOSS/EventStore/_build/latest?definitionId=2)
 
-Event Store is written in a mixture of C#, C++ and JavaScript. It can run either on Mono or .NET, however because it contains platform specific code (including hosting the v8 JavaScript engine), it must be built for the platform on which you intend to run it.
+## Documentation
+Documentation for Event Store can be found [here](https://eventstore.org/docs/)
 
-Binaries are available from http://geteventstore.com, however if you want to build it from source, instructions for Windows and Linux are below.
+## Community
+We have a fairly active [google groups list](https://groups.google.com/forum/#!forum/event-store). If you prefer slack, there is also an #eventstore channel [here](http://ddd-cqrs-es.herokuapp.com/).
 
-###Debug Builds on Linux or MacOS X
+## Release Packages
+The latest release packages are hosted in the downloads section on the [Event Store Website](https://eventstore.org/downloads/)
 
-There are two stages to building Event Store. First, a native library used for projections, `libjs1` must be built. Following that, the main Event Store project can be built.
+We also host native packages for Linux on [Package Cloud](https://packagecloud.io/EventStore/EventStore-OSS) and Windows packages can be installed via [Chocolatey](https://chocolatey.org/packages/eventstore-oss) (4.0.0 onwards only).
 
-If you are running on Mac OS X Yosemite, Ubuntu Linux 14.04 or Amazon Linux 2015.03, it is not necessary to build `libjs1` from source - precompiled binaries are already included in this repository. If you are running a different distribution or version than those listed above, you will need to compile `libjs1` yourself.
+## Building Event Store
 
-####Compiling libjs1
+Event Store is written in a mixture of C#, C++ and JavaScript. It can run either on Mono or .NET, however because it contains platform specific code (including hosting the V8 JavaScript engine), it must be built for the platform on which you intend to run it.
 
-#####Prerequisites
+### Linux
+**Prerequisites**
+- [Mono 5.16.0](https://www.mono-project.com/download/)
+- [.NET Core SDK 2.1.402](https://www.microsoft.com/net/download)
 
-- git on `PATH`
-- svn on `PATH` 
-- gcc installed 
-
-#####Instructions (Mac OS X)
-
-From the root of the repository:
-
-```bash
-scripts/build-js1/build-js1-mac.sh
+**Required Environment Variables**
+```
+export FrameworkPathOverride=/usr/lib/mono/4.7.1-api
 ```
 
-#####Instructions (Linux)
+### Windows
+**Prerequisites**
+- [.NET Framework 4.7.1 (Developer Pack)](https://www.microsoft.com/net/download)
+- [.NET Core SDK 2.1.402](https://www.microsoft.com/net/download)
 
-From the root of the repository:
+### Mac OS X
+**Prerequisites**
+- [Mono 5.16.0](https://www.mono-project.com/download/)
+- [.NET Core SDK 2.1.402](https://www.microsoft.com/net/download)
 
-```bash
-scripts/build-js1/build-js1-linux.sh [werror=no]
+**Required Environment Variables**
+```
+export FrameworkPathOverride=/Library/Frameworks/Mono.framework/Versions/5.16.0/lib/mono/4.7.1-api/
 ```
 
-It may be necessary to include `werror=no` as the only parameter to the script if you have a newer compiler which treats warnings appearing as a result of compiling the Google V8 codebase as errors.
-
-####Compiling Event Store (Linux and Mac OS X)
-
-From the root of the repository:
-
-```bash
-./build.sh [<version=0.0.0.0>] [<configuration=release>] [<distro-platform-override>]
+### Build EventStore
+Once you've installed the prerequisites for your system, you can launch a `Release` build of EventStore as follows:
+```
+dotnet build -c Release src/EventStore.sln
 ```
 
-Versions must be complete four part idenfitiers valid for use on a .NET assembly.
+To start a single node, you can then run:
+```
+bin/Release/EventStore.ClusterNode/net471/EventStore.ClusterNode.exe --db ../db --log ../logs
+```
 
-Valid configurations are:
-- debug
-- release
+You'll need to launch the node with `mono` on Linux or Mac OS X.
 
-The OS distribution and version will be detected automatically unless it is
-overriden as the last argument. This script expects to find `libjs1.[so|dylib]`
-in the `src/libs/x64/distroname-distroversion/` directory, built using the scripts
-in the `scripts/build-js1/` directory. Note that overriding this may result in
-crashes using Event Store.
+_Note: The build system has changed after version `4.1.1-hotfix1`, therefore the above instructions will not work for old releases._
 
-*The only supported Linux for production use at the moment is Ubuntu 14.04 LTS.*
-However, since several people have asked for builds compatible with Amazon Linux
-in particular, we have included a pre-built version of `libjs1.so` which will
-link to the correct version of libc on Amazon Linux 2015.03.
+### Running the tests
+You can launch the tests as follows:
 
-Currently the supported versions without needing to build `libjs1` from source are:
-- ubuntu-14.04 (Ubuntu Trusty)
-- amazon-2015.03 (Amazon Linux 2015.03)
+#### EventStore Core tests
+```
+dotnet test src/EventStore.Core.Tests/EventStore.Core.Tests.csproj -- RunConfiguration.TargetPlatform=x64
+```
 
-Note that it is no longer possible to build x86 builds of Event Store.
+#### EventStore Projections tests
+```
+dotnet test src/EventStore.Projections.Core.Tests/EventStore.Projections.Core.Tests.csproj -- RunConfiguration.TargetPlatform=x64
+```
 
-###Debug Builds on Windows / .NET
+## Building the EventStore Client / Embedded Client
+You can build the client / embedded client with the steps below. This will generate a nuget package file (.nupkg) that you can include in your project.
+#### Client
+```
+dotnet pack -c Release src/EventStore.ClientAPI/EventStore.ClientAPI.csproj /p:Version=5.0.0
+```
 
-####Prerequisites
+#### Embedded Client
+```
+dotnet pack -c Release src/EventStore.ClientAPI.Embedded/EventStore.ClientAPI.Embedded.csproj /p:Version=5.0.0
+```
 
-- .NET Framework v4.0+
-- Windows platform SDK with compilers (v7.1) or Visual C++ installed *(Only required for a full build)*
-- git on PATH
-- svn on PATH *(Only required for a full build)*
 
-####Building the Event Store
+## Building the EventStore web UI
+The web UI is prebuilt and the files are located under [src/EventStore.ClusterNode.Web/clusternode-web](src/EventStore.ClusterNode.Web/clusternode-web).
+If you want to build the web UI, please consult this [repository](https://github.com/EventStore/EventStore.UI) which is also a git submodule of the current repository located under `src/EventStore.UI`.
 
-From a command prompt:
+## Building the Projections Library
+The list of precompiled projections libraries can be found in `src/libs/x64`. If you still want to build the projections library please follow the links below.
+- [Linux](scripts/build-js1/build-js1-linux/README.md)
+- [Windows](scripts/build-js1/build-js1-win/build-js1-win-instructions.md)
+- [Mac OS X](scripts/build-js1/build-js1-mac/build-js1-mac.sh)
 
-- `build.cmd` - runs the Event Store build
-- `build.cmd clean-all` - cleans the repository
+## Contributing
 
-Optional parameters (Specified using `-ParameterName value`)
+Development is done on the `master` branch.
+We attempt to do our best to ensure that the history remains clean and to do so, we generally ask contributors to squash their commits into a set or single logical commit.
 
-- `-Platform` - `x64` (default) or `x86`
-- `-Configuration` - `release` (default) or `debug`
-- `-Version` - the semantic version number to give to the release. Defaults to version `0.0.0.0` which should be used for all non-released builds.
-- `-SpecificVisualStudioVersion` - `2010`, `2012`, `2013`, `Windows7.1SDK`. Default is to use whichever version is installed - this only needs to be overriden if you have multiple versions installed.
-- `-ForceNetwork` - true if you want to force the script to get dependencies even if Windows thinks theres no network connection (otherwise we don't try to avoid sometimes lengthy delays).
-- `-Defines` - any additional defines you want to pass to the compiler. Should be enclosed in single quotes
-
-####Building the Event Store from Visual Studio
-
-When building through Visual Studio, there are PowerShell scripts which run as
-pre- and post-build tasks on the EventStore.Common project, which set the
-informational version attribute of the EventStore.Common.dll assembly to the
-current commit hash on each build and then revert it.
-
+If you want to switch to a particular release, you can check out the tag for this particular version. For example:  
+`git checkout oss-v4.1.0`

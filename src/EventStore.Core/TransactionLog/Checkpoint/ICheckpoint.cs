@@ -1,17 +1,14 @@
 using System;
 
-namespace EventStore.Core.TransactionLog.Checkpoint
-{
-    public interface ICheckpoint: IDisposable
-    {
-        string Name { get; }
-        void Write(long checkpoint);
-        void Flush();
-        void Close();
+namespace EventStore.Core.TransactionLog.Checkpoint {
+	public interface ICheckpoint : IDisposable {
+		string Name { get; }
+		void Write(long checkpoint);
+		void Flush();
+		void Close();
+		long Read();
+		long ReadNonFlushed();
 
-        long Read();
-        long ReadNonFlushed();
-
-        bool WaitForFlush(TimeSpan timeout);
-    }
+		event Action<long> Flushed;
+	}
 }

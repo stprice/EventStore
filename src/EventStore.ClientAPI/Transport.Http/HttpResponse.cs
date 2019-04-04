@@ -1,57 +1,59 @@
-﻿using System.Net;
+﻿using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 
-namespace EventStore.ClientAPI.Transport.Http
-{
-    internal class HttpResponse
-    {
-        public readonly string CharacterSet;
+namespace EventStore.ClientAPI.Transport.Http {
+	internal class HttpResponse {
+		public readonly string CharacterSet;
 
-        public readonly string ContentEncoding;
-        public readonly long ContentLength;
-        public readonly string ContentType;
+		public readonly string ContentEncoding;
+		public readonly long ContentLength;
+		public readonly string ContentType;
 
-        //public readonly CookieCollection Cookies;
-        public readonly WebHeaderCollection Headers;
+		//public readonly CookieCollection Cookies;
+		public readonly HttpResponseHeaders Headers;
 
-        //public readonly bool IsFromCache;
-        //public readonly bool IsMutuallyAuthenticated;//TODO TR: not implemented in mono
-        //public readonly DateTime LastModified;
+		//public readonly bool IsFromCache;
+		//public readonly bool IsMutuallyAuthenticated;//TODO TR: not implemented in mono
+		//public readonly DateTime LastModified;
 
-        public readonly string Method;
-        //public readonly Version ProtocolVersion;
+		public readonly string Method;
+		//public readonly Version ProtocolVersion;
 
-        //public readonly Uri ResponseUri;
-        //public readonly string Server;
+		//public readonly Uri ResponseUri;
+		//public readonly string Server;
 
-        public readonly int HttpStatusCode;
-        public readonly string StatusDescription;
+		public readonly int HttpStatusCode;
+		public readonly string StatusDescription;
 
-        public string Body { get; internal set; }
+		public string Body { get; internal set; }
 
-        public HttpResponse(HttpWebResponse httpWebResponse)
-        {
-            CharacterSet = httpWebResponse.CharacterSet;
+		public HttpResponse(HttpResponseMessage responseMessage) {
+			ContentEncoding = responseMessage.Content.Headers.ContentEncoding.FirstOrDefault();
+			ContentLength = responseMessage.Content.Headers.ContentLength.Value;
 
-            ContentEncoding = httpWebResponse.ContentEncoding;
-            ContentLength = httpWebResponse.ContentLength;
-            ContentType = httpWebResponse.ContentType;
+			if (responseMessage.Content.Headers.ContentType != null) {
+				CharacterSet = responseMessage.Content.Headers.ContentType.CharSet;
+				ContentType = responseMessage.Content.Headers.ContentType.MediaType;
+			}
 
-            //Cookies = httpWebResponse.Cookies;
-            Headers = httpWebResponse.Headers;
 
-            //IsFromCache = httpWebResponse.IsFromCache;
-            //IsMutuallyAuthenticated = httpWebResponse.IsMutuallyAuthenticated;
+			//Cookies = httpWebResponse.Cookies;
+			Headers = responseMessage.Headers;
 
-            //LastModified = httpWebResponse.LastModified;
+			//IsFromCache = httpWebResponse.IsFromCache;
+			//IsMutuallyAuthenticated = httpWebResponse.IsMutuallyAuthenticated;
 
-            Method = httpWebResponse.Method;
-            //ProtocolVersion = httpWebResponse.ProtocolVersion;
+			//LastModified = httpWebResponse.LastModified;
 
-            //ResponseUri = httpWebResponse.ResponseUri;
-            //Server = httpWebResponse.Server;
+			Method = responseMessage.RequestMessage.Method.ToString();
+			//ProtocolVersion = httpWebResponse.ProtocolVersion;
 
-            HttpStatusCode = (int)httpWebResponse.StatusCode;
-            StatusDescription = httpWebResponse.StatusDescription;
-        }
-    }
+			//ResponseUri = httpWebResponse.ResponseUri;
+			//Server = httpWebResponse.Server;
+
+			HttpStatusCode = (int)responseMessage.StatusCode;
+			StatusDescription = responseMessage.ReasonPhrase;
+		}
+	}
 }

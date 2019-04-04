@@ -58,7 +58,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int EventNumber;
+    public readonly long EventNumber;
   
     [ProtoMember(3, IsRequired = true, Name=@"event_id", DataFormat = DataFormat.Default)]
     public readonly byte[] EventId;
@@ -86,7 +86,7 @@ namespace EventStore.ClientAPI.Messages
   
     private EventRecord() {}
   
-    public EventRecord(string eventStreamId, int eventNumber, byte[] eventId, string eventType, int dataContentType, int metadataContentType, byte[] data, byte[] metadata, long? created, long? createdEpoch)
+    public EventRecord(string eventStreamId, long eventNumber, byte[] eventId, string eventType, int dataContentType, int metadataContentType, byte[] data, byte[] metadata, long? created, long? createdEpoch)
     {
         EventStreamId = eventStreamId;
         EventNumber = eventNumber;
@@ -152,7 +152,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"expected_version", DataFormat = DataFormat.TwosComplement)]
-    public readonly int ExpectedVersion;
+    public readonly long ExpectedVersion;
   
     [ProtoMember(3, Name=@"events", DataFormat = DataFormat.Default)]
     public readonly NewEvent[] Events;
@@ -162,7 +162,7 @@ namespace EventStore.ClientAPI.Messages
   
     private WriteEvents() {}
   
-    public WriteEvents(string eventStreamId, int expectedVersion, NewEvent[] events, bool requireMaster)
+    public WriteEvents(string eventStreamId, long expectedVersion, NewEvent[] events, bool requireMaster)
     {
         EventStreamId = eventStreamId;
         ExpectedVersion = expectedVersion;
@@ -181,10 +181,10 @@ namespace EventStore.ClientAPI.Messages
     public readonly string Message;
   
     [ProtoMember(3, IsRequired = true, Name=@"first_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int FirstEventNumber;
+    public readonly long FirstEventNumber;
   
     [ProtoMember(4, IsRequired = true, Name=@"last_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int LastEventNumber;
+    public readonly long LastEventNumber;
   
     [ProtoMember(5, IsRequired = false, Name=@"prepare_position", DataFormat = DataFormat.TwosComplement)]
     public readonly long? PreparePosition;
@@ -192,9 +192,12 @@ namespace EventStore.ClientAPI.Messages
     [ProtoMember(6, IsRequired = false, Name=@"commit_position", DataFormat = DataFormat.TwosComplement)]
     public readonly long? CommitPosition;
   
+    [ProtoMember(7, IsRequired = false, Name=@"current_version", DataFormat = DataFormat.TwosComplement)]
+    public readonly long? CurrentVersion;
+  
     private WriteEventsCompleted() {}
   
-    public WriteEventsCompleted(OperationResult result, string message, int firstEventNumber, int lastEventNumber, long? preparePosition, long? commitPosition)
+    public WriteEventsCompleted(OperationResult result, string message, long firstEventNumber, long lastEventNumber, long? preparePosition, long? commitPosition, long? currentVersion)
     {
         Result = result;
         Message = message;
@@ -202,6 +205,7 @@ namespace EventStore.ClientAPI.Messages
         LastEventNumber = lastEventNumber;
         PreparePosition = preparePosition;
         CommitPosition = commitPosition;
+        CurrentVersion = currentVersion;
     }
   }
   
@@ -212,7 +216,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"expected_version", DataFormat = DataFormat.TwosComplement)]
-    public readonly int ExpectedVersion;
+    public readonly long ExpectedVersion;
   
     [ProtoMember(3, IsRequired = true, Name=@"require_master", DataFormat = DataFormat.Default)]
     public readonly bool RequireMaster;
@@ -222,7 +226,7 @@ namespace EventStore.ClientAPI.Messages
   
     private DeleteStream() {}
   
-    public DeleteStream(string eventStreamId, int expectedVersion, bool requireMaster, bool? hardDelete)
+    public DeleteStream(string eventStreamId, long expectedVersion, bool requireMaster, bool? hardDelete)
     {
         EventStreamId = eventStreamId;
         ExpectedVersion = expectedVersion;
@@ -264,14 +268,14 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"expected_version", DataFormat = DataFormat.TwosComplement)]
-    public readonly int ExpectedVersion;
+    public readonly long ExpectedVersion;
   
     [ProtoMember(3, IsRequired = true, Name=@"require_master", DataFormat = DataFormat.Default)]
     public readonly bool RequireMaster;
   
     private TransactionStart() {}
   
-    public TransactionStart(string eventStreamId, int expectedVersion, bool requireMaster)
+    public TransactionStart(string eventStreamId, long expectedVersion, bool requireMaster)
     {
         EventStreamId = eventStreamId;
         ExpectedVersion = expectedVersion;
@@ -376,10 +380,10 @@ namespace EventStore.ClientAPI.Messages
     public readonly string Message;
   
     [ProtoMember(4, IsRequired = true, Name=@"first_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int FirstEventNumber;
+    public readonly long FirstEventNumber;
   
     [ProtoMember(5, IsRequired = true, Name=@"last_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int LastEventNumber;
+    public readonly long LastEventNumber;
   
     [ProtoMember(6, IsRequired = false, Name=@"prepare_position", DataFormat = DataFormat.TwosComplement)]
     public readonly long? PreparePosition;
@@ -389,7 +393,7 @@ namespace EventStore.ClientAPI.Messages
   
     private TransactionCommitCompleted() {}
   
-    public TransactionCommitCompleted(long transactionId, OperationResult result, string message, int firstEventNumber, int lastEventNumber, long? preparePosition, long? commitPosition)
+    public TransactionCommitCompleted(long transactionId, OperationResult result, string message, long firstEventNumber, long lastEventNumber, long? preparePosition, long? commitPosition)
     {
         TransactionId = transactionId;
         Result = result;
@@ -408,7 +412,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int EventNumber;
+    public readonly long EventNumber;
   
     [ProtoMember(3, IsRequired = true, Name=@"resolve_link_tos", DataFormat = DataFormat.Default)]
     public readonly bool ResolveLinkTos;
@@ -418,7 +422,7 @@ namespace EventStore.ClientAPI.Messages
   
     private ReadEvent() {}
   
-    public ReadEvent(string eventStreamId, int eventNumber, bool resolveLinkTos, bool requireMaster)
+    public ReadEvent(string eventStreamId, long eventNumber, bool resolveLinkTos, bool requireMaster)
     {
         EventStreamId = eventStreamId;
         EventNumber = eventNumber;
@@ -479,7 +483,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly string EventStreamId;
   
     [ProtoMember(2, IsRequired = true, Name=@"from_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int FromEventNumber;
+    public readonly long FromEventNumber;
   
     [ProtoMember(3, IsRequired = true, Name=@"max_count", DataFormat = DataFormat.TwosComplement)]
     public readonly int MaxCount;
@@ -492,7 +496,7 @@ namespace EventStore.ClientAPI.Messages
   
     private ReadStreamEvents() {}
   
-    public ReadStreamEvents(string eventStreamId, int fromEventNumber, int maxCount, bool resolveLinkTos, bool requireMaster)
+    public ReadStreamEvents(string eventStreamId, long fromEventNumber, int maxCount, bool resolveLinkTos, bool requireMaster)
     {
         EventStreamId = eventStreamId;
         FromEventNumber = fromEventNumber;
@@ -512,10 +516,10 @@ namespace EventStore.ClientAPI.Messages
     public readonly ReadStreamEventsCompleted.ReadStreamResult Result;
   
     [ProtoMember(3, IsRequired = true, Name=@"next_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int NextEventNumber;
+    public readonly long NextEventNumber;
   
     [ProtoMember(4, IsRequired = true, Name=@"last_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int LastEventNumber;
+    public readonly long LastEventNumber;
   
     [ProtoMember(5, IsRequired = true, Name=@"is_end_of_stream", DataFormat = DataFormat.Default)]
     public readonly bool IsEndOfStream;
@@ -551,7 +555,7 @@ namespace EventStore.ClientAPI.Messages
   
     private ReadStreamEventsCompleted() {}
   
-    public ReadStreamEventsCompleted(ResolvedIndexedEvent[] events, ReadStreamEventsCompleted.ReadStreamResult result, int nextEventNumber, int lastEventNumber, bool isEndOfStream, long lastCommitPosition, string error)
+    public ReadStreamEventsCompleted(ResolvedIndexedEvent[] events, ReadStreamEventsCompleted.ReadStreamResult result, long nextEventNumber, long lastEventNumber, bool isEndOfStream, long lastCommitPosition, string error)
     {
         Events = events;
         Result = result;
@@ -661,7 +665,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly bool ResolveLinkTos;
   
     [ProtoMember(4, IsRequired = true, Name=@"start_from", DataFormat = DataFormat.TwosComplement)]
-    public readonly int StartFrom;
+    public readonly long StartFrom;
   
     [ProtoMember(5, IsRequired = true, Name=@"message_timeout_milliseconds", DataFormat = DataFormat.TwosComplement)]
     public readonly int MessageTimeoutMilliseconds;
@@ -701,7 +705,7 @@ namespace EventStore.ClientAPI.Messages
   
     private CreatePersistentSubscription() {}
   
-    public CreatePersistentSubscription(string subscriptionGroupName, string eventStreamId, bool resolveLinkTos, int startFrom, int messageTimeoutMilliseconds, bool recordStatistics, int liveBufferSize, int readBatchSize, int bufferSize, int maxRetryCount, bool preferRoundRobin, int checkpointAfterTime, int checkpointMaxCount, int checkpointMinCount, int subscriberMaxCount, string namedConsumerStrategy)
+    public CreatePersistentSubscription(string subscriptionGroupName, string eventStreamId, bool resolveLinkTos, long startFrom, int messageTimeoutMilliseconds, bool recordStatistics, int liveBufferSize, int readBatchSize, int bufferSize, int maxRetryCount, bool preferRoundRobin, int checkpointAfterTime, int checkpointMaxCount, int checkpointMinCount, int subscriberMaxCount, string namedConsumerStrategy)
     {
         SubscriptionGroupName = subscriptionGroupName;
         EventStreamId = eventStreamId;
@@ -753,7 +757,7 @@ namespace EventStore.ClientAPI.Messages
     public readonly bool ResolveLinkTos;
   
     [ProtoMember(4, IsRequired = true, Name=@"start_from", DataFormat = DataFormat.TwosComplement)]
-    public readonly int StartFrom;
+    public readonly long StartFrom;
   
     [ProtoMember(5, IsRequired = true, Name=@"message_timeout_milliseconds", DataFormat = DataFormat.TwosComplement)]
     public readonly int MessageTimeoutMilliseconds;
@@ -793,7 +797,7 @@ namespace EventStore.ClientAPI.Messages
   
     private UpdatePersistentSubscription() {}
   
-    public UpdatePersistentSubscription(string subscriptionGroupName, string eventStreamId, bool resolveLinkTos, int startFrom, int messageTimeoutMilliseconds, bool recordStatistics, int liveBufferSize, int readBatchSize, int bufferSize, int maxRetryCount, bool preferRoundRobin, int checkpointAfterTime, int checkpointMaxCount, int checkpointMinCount, int subscriberMaxCount, string namedConsumerStrategy)
+    public UpdatePersistentSubscription(string subscriptionGroupName, string eventStreamId, bool resolveLinkTos, long startFrom, int messageTimeoutMilliseconds, bool recordStatistics, int liveBufferSize, int readBatchSize, int bufferSize, int maxRetryCount, bool preferRoundRobin, int checkpointAfterTime, int checkpointMaxCount, int checkpointMinCount, int subscriberMaxCount, string namedConsumerStrategy)
     {
         SubscriptionGroupName = subscriptionGroupName;
         EventStreamId = eventStreamId;
@@ -1015,11 +1019,11 @@ namespace EventStore.ClientAPI.Messages
     public readonly string SubscriptionId;
   
     [ProtoMember(3, IsRequired = false, Name=@"last_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int? LastEventNumber;
+    public readonly long? LastEventNumber;
   
     private PersistentSubscriptionConfirmation() {}
   
-    public PersistentSubscriptionConfirmation(long lastCommitPosition, string subscriptionId, int? lastEventNumber)
+    public PersistentSubscriptionConfirmation(long lastCommitPosition, string subscriptionId, long? lastEventNumber)
     {
         LastCommitPosition = lastCommitPosition;
         SubscriptionId = subscriptionId;
@@ -1033,11 +1037,15 @@ namespace EventStore.ClientAPI.Messages
     [ProtoMember(1, IsRequired = true, Name=@"event", DataFormat = DataFormat.Default)]
     public readonly ResolvedIndexedEvent Event;
   
+    [ProtoMember(2, IsRequired = false, Name=@"retryCount", DataFormat = DataFormat.TwosComplement)]
+    public readonly int? RetryCount;
+  
     private PersistentSubscriptionStreamEventAppeared() {}
   
-    public PersistentSubscriptionStreamEventAppeared(ResolvedIndexedEvent @event)
+    public PersistentSubscriptionStreamEventAppeared(ResolvedIndexedEvent @event, int? retryCount)
     {
         Event = @event;
+        RetryCount = retryCount;
     }
   }
   
@@ -1066,11 +1074,11 @@ namespace EventStore.ClientAPI.Messages
     public readonly long LastCommitPosition;
   
     [ProtoMember(2, IsRequired = false, Name=@"last_event_number", DataFormat = DataFormat.TwosComplement)]
-    public readonly int? LastEventNumber;
+    public readonly long? LastEventNumber;
   
     private SubscriptionConfirmation() {}
   
-    public SubscriptionConfirmation(long lastCommitPosition, int? lastEventNumber)
+    public SubscriptionConfirmation(long lastCommitPosition, long? lastEventNumber)
     {
         LastCommitPosition = lastCommitPosition;
         LastEventNumber = lastEventNumber;
@@ -1207,43 +1215,61 @@ namespace EventStore.ClientAPI.Messages
     }
   }
   
-  [Serializable, ProtoContract(Name=@"ScavengeDatabaseCompleted")]
-  public partial class ScavengeDatabaseCompleted
+  [Serializable, ProtoContract(Name=@"ScavengeDatabaseResponse")]
+  public partial class ScavengeDatabaseResponse
   {
     [ProtoMember(1, IsRequired = true, Name=@"result", DataFormat = DataFormat.TwosComplement)]
-    public readonly ScavengeDatabaseCompleted.ScavengeResult Result;
+    public readonly ScavengeDatabaseResponse.ScavengeResult Result;
   
-    [ProtoMember(2, IsRequired = false, Name=@"error", DataFormat = DataFormat.Default)]
-    public readonly string Error;
-  
-    [ProtoMember(3, IsRequired = true, Name=@"total_time_ms", DataFormat = DataFormat.TwosComplement)]
-    public readonly int TotalTimeMs;
-  
-    [ProtoMember(4, IsRequired = true, Name=@"total_space_saved", DataFormat = DataFormat.TwosComplement)]
-    public readonly long TotalSpaceSaved;
+    [ProtoMember(2, IsRequired = false, Name=@"scavengeId", DataFormat = DataFormat.Default)]
+    public readonly string ScavengeId;
   
     [ProtoContract(Name=@"ScavengeResult")]
     public enum ScavengeResult
     {
             
-      [ProtoEnum(Name=@"Success", Value=0)]
-      Success = 0,
+      [ProtoEnum(Name=@"Started", Value=0)]
+      Started = 0,
             
       [ProtoEnum(Name=@"InProgress", Value=1)]
       InProgress = 1,
             
-      [ProtoEnum(Name=@"Failed", Value=2)]
-      Failed = 2
+      [ProtoEnum(Name=@"Unauthorized", Value=2)]
+      Unauthorized = 2
     }
   
-    private ScavengeDatabaseCompleted() {}
+    private ScavengeDatabaseResponse() {}
   
-    public ScavengeDatabaseCompleted(ScavengeDatabaseCompleted.ScavengeResult result, string error, int totalTimeMs, long totalSpaceSaved)
+    public ScavengeDatabaseResponse(ScavengeDatabaseResponse.ScavengeResult result, string scavengeId)
     {
         Result = result;
-        Error = error;
-        TotalTimeMs = totalTimeMs;
-        TotalSpaceSaved = totalSpaceSaved;
+        ScavengeId = scavengeId;
+    }
+  }
+  
+  [Serializable, ProtoContract(Name=@"IdentifyClient")]
+  public partial class IdentifyClient
+  {
+    [ProtoMember(1, IsRequired = true, Name=@"version", DataFormat = DataFormat.TwosComplement)]
+    public readonly int Version;
+  
+    [ProtoMember(2, IsRequired = false, Name=@"connection_name", DataFormat = DataFormat.Default)]
+    public readonly string ConnectionName;
+  
+    private IdentifyClient() {}
+  
+    public IdentifyClient(int version, string connectionName)
+    {
+        Version = version;
+        ConnectionName = connectionName;
+    }
+  }
+  
+  [Serializable, ProtoContract(Name=@"ClientIdentified")]
+  public partial class ClientIdentified
+  {
+    public ClientIdentified()
+    {
     }
   }
   
